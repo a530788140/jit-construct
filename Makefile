@@ -1,6 +1,6 @@
 BIN = interpreter \
       compiler-x86 compiler-x64 compiler-arm \
-      jit-x86 jit-x64 jit-arm
+      jit-x86 jit-x64 jit-arm jit-x64_opt
 
 CROSS_COMPILE = arm-linux-gnueabihf-
 QEMU_ARM = qemu-arm -L /usr/arm-linux-gnueabihf
@@ -53,6 +53,13 @@ jit-x64: dynasm-driver.c jit-x64.h
 		dynasm-driver.c
 jit-x64.h: jit-x64.dasc
 	        $(LUA) dynasm/dynasm.lua -o $@ jit-x64.dasc
+
+jit-x64_opt: dynasm-driver.c jit-x64_opt.h
+	$(CC) $(CFLAGS) -o $@ -DJIT=\"jit-x64_opt.h\" \
+		dynasm-driver.c
+jit-x64_opt.h: jit-x64_opt.dasc
+	        $(LUA) dynasm/dynasm.lua -o $@ jit-x64_opt.dasc
+
 run-jit-x64: jit-x64
 	./jit-x64 progs/hello.b && objdump -D -b binary \
 		-mi386 -Mx86-64 /tmp/jitcode
@@ -89,8 +96,19 @@ test: test_stack jit0-x64 jit0-arm
 test_stack: tests/test_stack.c
 	$(CC) $(CFLAGS) -o $@ $^
 
+calculate: jit-x64 jit-x64_opt
+	@echo
+	@echo Executing Brainf*ck benchmark suite. Be patient.
+	@echo Compare orig and opt
+	@echo
+	@env PATH='.:${PATH}' BF_RUN='$<' tests/calculate.py
+
+plot: calculate
+	gnuplot scripts/runtime.gp 
+
 clean:
 	$(RM) $(BIN) \
 	      hello-x86 hello-x64 hello-arm hello.s \
 	      test_stack jit0-x64 jit0-arm \
-	      jit-x86.h jit-x64.h jit-arm.h
+	      jit-x86.h jit-x64.h jit-arm.h jit-x64_opt.h \
+	      runtime.png output.txt
